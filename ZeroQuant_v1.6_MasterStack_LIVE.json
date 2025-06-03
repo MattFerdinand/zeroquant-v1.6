@@ -1,0 +1,146 @@
+{
+  "name": "ZeroQuant_v1.6_MasterStack_LIVE",
+  "nodes": [
+    {
+      "name": "System Config",
+      "type": "n8n-nodes-base.set",
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "symbol",
+              "value": "TSLA"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "gekko_enabled",
+              "value": true
+            },
+            {
+              "name": "paper_trading",
+              "value": true
+            }
+          ],
+          "number": [
+            {
+              "name": "max_risk",
+              "value": 0.01
+            }
+          ]
+        }
+      },
+      "id": "config-node",
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "name": "Fetch Price Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "https://api.polygon.io/v2/aggs/ticker/TSLA/range/1/minute/2025-06-01/2025-06-01",
+        "authentication": "genericCredentialType",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.POLYGON_API_KEY}}"
+        },
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        }
+      },
+      "id": "fetch-node",
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "name": "Darvas Box Logic",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "// Darvas Box Breakout Detection\nconst data = $input.all()[0].json;\nconst results = data.results || [];\n\nif (results.length < 20) {\n  return [];\n}\n\nconst highs = results.slice(-20).map(r => r.h);\nconst lows = results.slice(-20).map(r => r.l);\nconst volumes = results.slice(-20).map(r => r.v);\n\nconst boxHigh = Math.max(...highs.slice(0, -1));\nconst boxLow = Math.min(...lows.slice(0, -1));\nconst currentPrice = results[results.length - 1].c;\nconst currentVolume = results[results.length - 1].v;\nconst avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;\n\nconst volumeSpike = currentVolume / avgVolume;\nconst priceBreakout = currentPrice > boxHigh;\nconst volumeConfirm = volumeSpike > 1.5;\n\nif (priceBreakout && volumeConfirm) {\n  return [{\n    json: {\n      symbol: 'TSLA',\n      signal: 'BUY',\n      price: currentPrice,\n      confidence: Math.min(volumeSpike / 2, 3.0),\n      volume_ratio: volumeSpike,\n      timestamp: new Date().toISOString()\n    }\n  }];\n}\nreturn [{json: {signal: 'HOLD'}}];"
+      },
+      "id": "darvas-node",
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "name": "Write to Live GSheet (Fixed)",
+      "type": "n8n-nodes-base.googleSheets",
+      "parameters": {
+        "operation": "append",
+        "spreadsheetId": "1ct-WOPhfYOJ7hIJQ9e5AO_O4PDfuCAV-ylANKXzRZLo",
+        "range": "Live_Logs!A1:D",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "timestamp",
+              "fieldValue": "={{$json.timestamp}}"
+            },
+            {
+              "column": "symbol",
+              "fieldValue": "={{$json.symbol}}"
+            },
+            {
+              "column": "price",
+              "fieldValue": "={{$json.price}}"
+            },
+            {
+              "column": "signal",
+              "fieldValue": "={{$json.signal}}"
+            }
+          ]
+        }
+      },
+      "id": "log-node",
+      "position": [
+        700,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "System Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch Price Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Price Data": {
+      "main": [
+        [
+          {
+            "node": "Darvas Box Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Darvas Box Logic": {
+      "main": [
+        [
+          {
+            "node": "Write to Live GSheet (Fixed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

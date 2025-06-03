@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: zeroquant-v1-6
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: N8N_BASIC_AUTH_USER
+        value: admin
+      - key: N8N_BASIC_AUTH_PASSWORD
+        value: zeroquantai2025
+      - key: POLYGON_API_KEY
+        value: your_polygon_api_key_here
+      - key: SENDGRID_API_KEY
+        value: your_sendgrid_api_key_here
+      - key: GOOGLE_SHEETS_CLIENT_EMAIL
+        value: your_service_account_email_here
+      - key: GOOGLE_SHEETS_PRIVATE_KEY
+        value: your_service_account_private_key_here
